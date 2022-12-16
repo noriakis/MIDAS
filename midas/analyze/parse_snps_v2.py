@@ -6,11 +6,13 @@
 
 import sys, os, gzip, numpy as np, random, csv
 from midas.utility import print_copyright
+import lz4.frame
+import io
 
 class Sample:
 	""" Base class for sample """
 	def __init__(self, info):
-		self.id = info['sample_id']
+		self.id = info['sample_name']
 		self.info = info
 		self.mean_depth = float(self.info['mean_coverage'])
 		self.fract_cov = float(self.info['fraction_covered'])
@@ -25,34 +27,42 @@ class Sample:
 			return False
 
 class Species:
-	""" Base class for species """
-	
-	def __init__(self, dir):
-		
-		self.dir = dir
-		self.id = os.path.basename(self.dir)
-		self.init_paths()
-		self.init_files()
-		self.init_samples()
+    """ Base class for species in MIDAS2 """
 
-	def init_paths(self):
-		self.paths = {}
-		for type in ['freq', 'depth', 'info', 'summary']:
-			self.paths[type] = '%s/snps_%s.txt' % (self.dir, type)
+    def __init__(self, dir):
+        if "/" in dir:
+            self.spid = dir.split("/")[-1]
+        else:
+            self.spid = dir
+        self.dir = dir
+        self.id = os.path.basename(self.dir)
+        self.init_paths()
+        self.init_files()
+        self.init_samples()
 
-	def init_files(self):
-		self.files = {}
-		for type in ['freq', 'depth', 'info', 'summary']:
-			file = open(self.paths[type])
-			if type in ['info', 'summary']:
-				self.files[type] = csv.DictReader(file, delimiter='\t')
-			else:
-				self.files[type] = csv.reader(file, delimiter='\t')
-
-	def init_samples(self):
-		self.sample_ids = None
-		for file in ['freq', 'depth']:
-			self.sample_ids = next(self.files[file])[1:]
+    def init_paths(self):
+        self.paths = {}
+        for type in ['freqs', 'depth', 'info']:
+            self.paths[type] = '%s/%s.snps_%s.tsv.lz4' % (self.dir, self.spid, type)
+    def init_files(self):
+        self.files = {}
+        for type in ['freqs', 'depth', 'info']:
+            ## Read LZ4 files
+            file = lz4.frame.open(self.paths[type]).read().decode('utf-8')
+            if type in ['info']:
+                self.files[type] = csv.DictReader(io.StringIO(file), delimiter='\t')
+            else:
+                self.files[type] = csv.reader(io.StringIO(file), delimiter='\t')
+        print(self.spid)
+        ## All SNV summary is in snps in MIDAS2
+        prev_path = os.path.abspath(os.path.join(self.dir, os.pardir))
+        file = open(prev_path+'/snps_summary.tsv')
+        reader = csv.DictReader(file, delimiter='\t')
+        self.files["summary"]=[row for row in reader if self.spid in row["species_id"]]
+    def init_samples(self):
+        self.sample_ids = None
+        for file in ['freqs', 'depth']:
+            self.sample_ids = next(self.files[file])[1:]
 
 
 class GenomicSite:
@@ -62,7 +72,7 @@ class GenomicSite:
 			# fetch site info
 			self.info = next(species.files['info'])
 			self.id = self.info['site_id']
-			self.ref_allele = self.info['ref_allele']
+			# self.ref_allele = self.info['ref_allele']
 			self.minor_allele = self.info['minor_allele']
 			self.major_allele = self.info['major_allele']
 			self.gene_id = self.info['gene_id']
@@ -83,7 +93,7 @@ class GenomicSite:
 	def fetch_row(self, species):
 		""" Fetch next row from freq and depth matrices
 		    Store in sample objects: sample.freq, sample.depth """
-		freqs = next(species.files['freq'])[1:]
+		freqs = next(species.files['freqs'])[1:]
 		depths = next(species.files['depth'])[1:]
 		for sample in self.samples.values():
 			self.samples[sample.id].freq = float(freqs[sample.index])
@@ -114,9 +124,9 @@ class GenomicSite:
 		""" determine if site passes quality control """
 		self.flags = []
 		self.keep = True
-		if self.ref_allele not in ['A','T','C','G']:
-			self.flags.append('ref-allele')
-			self.keep = False
+		# if self.ref_allele not in ['A','T','C','G']:
+		# 	self.flags.append('ref-allele')
+		# 	self.keep = False
 		if site_prev and self.prevalence < max(1e-6, site_prev):
 			self.flags.append('site-prev')
 			self.keep = False
@@ -227,3 +237,4 @@ def fetch_sites(species, samples):
 		else:
 			index += 1
 			yield site
+

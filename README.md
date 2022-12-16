@@ -1,3 +1,7 @@
+# Purpose:
+- Make scripts in MIDAS compatible with MIDAS2.
+    - call_consensus_v2.py
+
 # Metagenomic Intra-Species Diversity Analysis System (MIDAS)
 
 MIDAS is an integrated pipeline that leverages >30,000 reference genomes to estimate bacterial species abundance and strain-level genomic variation, including gene content and SNPs, from shotgun metagnomes. 
