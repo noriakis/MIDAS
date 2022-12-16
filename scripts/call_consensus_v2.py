@@ -182,13 +182,13 @@ if __name__ == '__main__':
 	print_args(args)
 	
 	# init species, samples, sequences, site list
-	species = parse_snps.Species(args['indir'])
-	samples = parse_snps.fetch_samples(species, args['sample_depth'], args['fract_cov'], args['max_samples'])
+	species = parse_snps_v2.Species(args['indir'])
+	samples = parse_snps_v2.fetch_samples(species, args['sample_depth'], args['fract_cov'], args['max_samples'])
 	if args['site_list']: 
 		site_list = set([_.rstrip() for _ in open(args['site_list'])])
 	
 	# loop over genomic sites
-	sites = parse_snps.fetch_sites(species, samples)
+	sites = parse_snps_v2.fetch_sites(species, samples)
 	retained_sites = 0
 	for index, site in enumerate(sites):
 	
